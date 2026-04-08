@@ -19,9 +19,9 @@ export type Zone = "Norte" | "Centro" | "RM" | "Sur";
 
 export const ZONES: Record<Zone, string[]> = {
   Norte: ["XV", "I", "II", "III", "IV"],
-  Centro: ["V", "VI", "VII", "VIII"],
+  Centro: ["V", "VI", "VII"],
   RM: ["XIII"],
-  Sur: ["IX", "XIV", "X", "XI", "XII", "XVI"],
+  Sur: ["VIII", "IX", "XIV", "X", "XI", "XII", "XVI"],
 };
 
 export const ZONE_LABELS: Record<Zone, string> = {
@@ -254,7 +254,7 @@ export const CENSUS_DATA: RegionData[] = [
     ],
   },
   {
-    code: "VIII", name: "Biobío", zone: "Centro",
+    code: "VIII", name: "Biobío", zone: "Sur",
     population: [
       { ageMin: 0, ageMax: 4, male: 52500, female: 50200 },
       { ageMin: 5, ageMax: 9, male: 54200, female: 52000 },
