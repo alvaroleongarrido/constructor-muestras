@@ -62,6 +62,9 @@ export default function SampleDashboard() {
   const [groupBy, setGroupBy] = useState<"region" | "zone">("zone");
   const [newRangeMin, setNewRangeMin] = useState("");
   const [newRangeMax, setNewRangeMax] = useState("");
+  const [crossSex, setCrossSex] = useState(true);
+  const [crossAge, setCrossAge] = useState(true);
+  const [crossRegion, setCrossRegion] = useState(true);
 
   const config: SampleConfig = useMemo(
     () => ({ ageMin, ageMax, sexFilter, selectedRegions, ageRanges, sampleSize, groupBy }),
