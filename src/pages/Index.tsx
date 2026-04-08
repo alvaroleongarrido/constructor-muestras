@@ -602,33 +602,54 @@ export default function SampleDashboard() {
 
               {/* Crossed Quotas */}
               <TabsContent value="crossed">
-                <p className="text-xs text-muted-foreground mb-3">{result.quotas.length} segmentos cruzados</p>
-                <div className="rounded-md border overflow-auto max-h-96">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>
-                        <TableHead className="font-semibold">Sexo</TableHead>
-                        <TableHead className="font-semibold">Tramo Edad</TableHead>
-                        <TableHead className="font-semibold text-right">Población</TableHead>
-                        <TableHead className="font-semibold text-right">Proporción</TableHead>
-                        <TableHead className="font-semibold text-right">Muestra</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {result.quotas.map((q, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="text-sm">{q.region}</TableCell>
-                          <TableCell className="text-sm">{q.sex}</TableCell>
-                          <TableCell className="text-sm">{q.ageRange}</TableCell>
-                          <TableCell className="text-sm text-right font-mono">{q.population.toLocaleString("es-CL")}</TableCell>
-                          <TableCell className="text-sm text-right font-mono">{(q.proportion * 100).toFixed(2)}%</TableCell>
-                          <TableCell className="text-sm text-right font-mono font-semibold text-primary">{q.sample}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  <span className="text-sm font-medium text-foreground">Cruzar por:</span>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="cross-sex" checked={crossSex} onCheckedChange={(v) => setCrossSex(!!v)} />
+                    <Label htmlFor="cross-sex" className="text-sm cursor-pointer">Sexo</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="cross-age" checked={crossAge} onCheckedChange={(v) => setCrossAge(!!v)} />
+                    <Label htmlFor="cross-age" className="text-sm cursor-pointer">Tramo de Edad</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="cross-region" checked={crossRegion} onCheckedChange={(v) => setCrossRegion(!!v)} />
+                    <Label htmlFor="cross-region" className="text-sm cursor-pointer">{groupBy === "zone" ? "Zona" : "Región"}</Label>
+                  </div>
                 </div>
+                {(!crossSex && !crossAge && !crossRegion) ? (
+                  <p className="text-sm text-muted-foreground">Selecciona al menos una variable para cruzar.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-3">{crossedQuotas.length} segmentos cruzados</p>
+                    <div className="rounded-md border overflow-auto max-h-96">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            {crossRegion && <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>}
+                            {crossSex && <TableHead className="font-semibold">Sexo</TableHead>}
+                            {crossAge && <TableHead className="font-semibold">Tramo Edad</TableHead>}
+                            <TableHead className="font-semibold text-right">Población</TableHead>
+                            <TableHead className="font-semibold text-right">Proporción</TableHead>
+                            <TableHead className="font-semibold text-right">Muestra</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {crossedQuotas.map((q, i) => (
+                            <TableRow key={i}>
+                              {crossRegion && <TableCell className="text-sm">{q.region}</TableCell>}
+                              {crossSex && <TableCell className="text-sm">{q.sex}</TableCell>}
+                              {crossAge && <TableCell className="text-sm">{q.ageRange}</TableCell>}
+                              <TableCell className="text-sm text-right font-mono">{q.population.toLocaleString("es-CL")}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{(q.proportion * 100).toFixed(2)}%</TableCell>
+                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{q.sample}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>
