@@ -73,6 +73,30 @@ export default function SampleDashboard() {
 
   const result: SampleResult = useMemo(() => calculateSample(config), [config]);
 
+  const crossedQuotas = useMemo(() => {
+    if (crossSex && crossAge && crossRegion) return result.quotas;
+    const grouped = new Map<string, { region: string; sex: string; ageRange: string; population: number }>();
+    for (const q of result.quotas) {
+      const regionVal = crossRegion ? q.region : "Todos";
+      const sexVal = crossSex ? q.sex : "Todos";
+      const ageVal = crossAge ? q.ageRange : "Todos";
+      const key = `${regionVal}|${sexVal}|${ageVal}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.population += q.population;
+      } else {
+        grouped.set(key, { region: regionVal, sex: sexVal, ageRange: ageVal, population: q.population });
+      }
+    }
+    const rows = Array.from(grouped.values());
+    const total = rows.reduce((s, r) => s + r.population, 0);
+    return rows.map((r) => ({
+      ...r,
+      proportion: total > 0 ? r.population / total : 0,
+      sample: Math.round((r.population / (total || 1)) * config.sampleSize),
+    }));
+  }, [result.quotas, crossSex, crossAge, crossRegion, config.sampleSize]);
+
   const toggleZone = useCallback(
     (zone: Zone, checked: boolean) => {
       const zoneCodes = ZONE_REGIONS[zone];
