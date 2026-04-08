@@ -37,9 +37,9 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
 
 const ZONE_REGIONS: Record<Zone, string[]> = {
   Norte: ["XV", "I", "II", "III", "IV"],
-  Centro: ["V", "VI", "VII", "VIII"],
+  Centro: ["V", "VI", "VII"],
   RM: ["XIII"],
-  Sur: ["IX", "XIV", "X", "XI", "XII", "XVI"],
+  Sur: ["VIII", "IX", "XIV", "X", "XI", "XII", "XVI"],
 };
 
 const CHART_COLORS = [

@@ -21,7 +21,7 @@ export const ZONES: Record<Zone, string[]> = {
   Norte: ["XV", "I", "II", "III", "IV"],
   Centro: ["V", "VI", "VII"],
   RM: ["XIII"],
-  Sur: ["IX", "XIV", "X", "XI", "XII", "XVI"],
+  Sur: ["VIII", "IX", "XIV", "X", "XI", "XII", "XVI"],
 };
 
 export const ZONE_LABELS: Record<Zone, string> = {
