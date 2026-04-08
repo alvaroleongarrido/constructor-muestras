@@ -454,14 +454,14 @@ export default function SampleDashboard() {
           </Card>
         </div>
 
-        {/* Quota Table */}
+        {/* Quota Tables */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Tabla de Cuotas</CardTitle>
+                <CardTitle className="text-base">Tablas de Cuotas</CardTitle>
                 <CardDescription>
-                  Distribución proporcional de la muestra — {result.quotas.length} segmentos
+                  Distribución proporcional de la muestra
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -477,38 +477,133 @@ export default function SampleDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border overflow-auto max-h-96">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>
-                    <TableHead className="font-semibold">Sexo</TableHead>
-                    <TableHead className="font-semibold">Tramo Edad</TableHead>
-                    <TableHead className="font-semibold text-right">Población</TableHead>
-                    <TableHead className="font-semibold text-right">Proporción</TableHead>
-                    <TableHead className="font-semibold text-right">Muestra</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.quotas.map((q, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-sm">{q.region}</TableCell>
-                      <TableCell className="text-sm">{q.sex}</TableCell>
-                      <TableCell className="text-sm">{q.ageRange}</TableCell>
-                      <TableCell className="text-sm text-right font-mono">
-                        {q.population.toLocaleString("es-CL")}
-                      </TableCell>
-                      <TableCell className="text-sm text-right font-mono">
-                        {(q.proportion * 100).toFixed(2)}%
-                      </TableCell>
-                      <TableCell className="text-sm text-right font-mono font-semibold text-primary">
-                        {q.sample}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <Tabs defaultValue="direct" className="w-full">
+              <TabsList className="mb-4">
+                <TabsTrigger value="direct">Cuotas Directas</TabsTrigger>
+                <TabsTrigger value="crossed">Cuotas Cruzadas</TabsTrigger>
+              </TabsList>
+
+              {/* Direct Quotas */}
+              <TabsContent value="direct" className="space-y-6">
+                {/* By Sex */}
+                {result.bySex.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Por Sexo</h4>
+                    <div className="rounded-md border overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-semibold">Sexo</TableHead>
+                            <TableHead className="font-semibold text-right">Población</TableHead>
+                            <TableHead className="font-semibold text-right">Proporción</TableHead>
+                            <TableHead className="font-semibold text-right">Muestra</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {result.bySex.map((row, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-sm">{row.label}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
+                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* By Age */}
+                {result.byAge.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Por Tramo de Edad</h4>
+                    <div className="rounded-md border overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-semibold">Tramo</TableHead>
+                            <TableHead className="font-semibold text-right">Población</TableHead>
+                            <TableHead className="font-semibold text-right">Proporción</TableHead>
+                            <TableHead className="font-semibold text-right">Muestra</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {result.byAge.map((row, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-sm">{row.label}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
+                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                {/* By Region/Zone */}
+                {result.byRegion.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2">Por {groupBy === "zone" ? "Zona" : "Región"}</h4>
+                    <div className="rounded-md border overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>
+                            <TableHead className="font-semibold text-right">Población</TableHead>
+                            <TableHead className="font-semibold text-right">Proporción</TableHead>
+                            <TableHead className="font-semibold text-right">Muestra</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {result.byRegion.map((row, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-sm">{row.label}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
+                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
+                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Crossed Quotas */}
+              <TabsContent value="crossed">
+                <p className="text-xs text-muted-foreground mb-3">{result.quotas.length} segmentos cruzados</p>
+                <div className="rounded-md border overflow-auto max-h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>
+                        <TableHead className="font-semibold">Sexo</TableHead>
+                        <TableHead className="font-semibold">Tramo Edad</TableHead>
+                        <TableHead className="font-semibold text-right">Población</TableHead>
+                        <TableHead className="font-semibold text-right">Proporción</TableHead>
+                        <TableHead className="font-semibold text-right">Muestra</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {result.quotas.map((q, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">{q.region}</TableCell>
+                          <TableCell className="text-sm">{q.sex}</TableCell>
+                          <TableCell className="text-sm">{q.ageRange}</TableCell>
+                          <TableCell className="text-sm text-right font-mono">{q.population.toLocaleString("es-CL")}</TableCell>
+                          <TableCell className="text-sm text-right font-mono">{(q.proportion * 100).toFixed(2)}%</TableCell>
+                          <TableCell className="text-sm text-right font-mono font-semibold text-primary">{q.sample}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
