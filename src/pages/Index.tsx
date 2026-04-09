@@ -66,9 +66,9 @@ export default function SampleDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/personas_censo.json").then((r) => r.json()),
-      fetch("https://raw.githubusercontent.com/alvaroleongarrido/constructor-muestras/main/public/personas_gse_censo.json").then((r) => r.json()),
-      fetch("/gse_comunas.json").then((r) => r.json()),
+      fetch("https://raw.githubusercontent.com/alvaroleongarrido/constructor-muestras/refs/heads/main/public/data/personas_censo.json").then((r) => r.json()),
+      fetch("https://raw.githubusercontent.com/alvaroleongarrido/constructor-muestras/refs/heads/main/public/data/personas_gse_censo.json").then((r) => r.json()),
+      fetch("https://raw.githubusercontent.com/alvaroleongarrido/constructor-muestras/refs/heads/main/public/data/gse_comunas.json").then((r) => r.json()),
     ])
       .then(([censo, gse, comunas]) => {
         setPersonasCenso(censo);
