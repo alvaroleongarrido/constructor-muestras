@@ -103,7 +103,7 @@ export default function SampleDashboard() {
     if (!gseComunas) return [];
     return gseComunas
       .filter((c) => selectedRegions.includes(c.region))
-      .sort((a, b) => a.nombre_comuna.localeCompare(b.nombre_comuna));
+      .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""))
   }, [gseComunas, selectedRegions]);
 
   // Reset comunas when regions change
