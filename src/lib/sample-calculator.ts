@@ -208,3 +208,53 @@ export function exportToCSV(result: SampleResult): string {
   ]);
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
+
+export function exportToExcel(result: SampleResult): string {
+  const pct = (n: number) => (n * 100).toFixed(2) + "%";
+
+  const titleRow = (title: string) =>
+    `<Row><Cell ss:StyleID="t"><Data ss:Type="String">${title}</Data></Cell></Row>`;
+
+  const headerRow = (cols: string[]) =>
+    `<Row>${cols.map((c) => `<Cell ss:StyleID="h"><Data ss:Type="String">${c}</Data></Cell>`).join("")}</Row>`;
+
+  const emptyRow = `<Row><Cell><Data ss:Type="String"></Data></Cell></Row>`;
+
+  const dataRow = (label: string, pop: number, prop: number, sample: number) =>
+    `<Row>` +
+    `<Cell><Data ss:Type="String">${label}</Data></Cell>` +
+    `<Cell><Data ss:Type="Number">${pop}</Data></Cell>` +
+    `<Cell><Data ss:Type="String">${pct(prop)}</Data></Cell>` +
+    `<Cell><Data ss:Type="Number">${sample}</Data></Cell>` +
+    `</Row>`;
+
+  const rows: string[] = [];
+
+  rows.push(titleRow("Por Sexo"));
+  rows.push(headerRow(["Sexo", "Población", "Proporción", "Muestra"]));
+  result.bySex.forEach((r) => rows.push(dataRow(r.label, r.population, r.proportion, r.sample)));
+  rows.push(emptyRow);
+
+  rows.push(titleRow("Por Tramo de Edad"));
+  rows.push(headerRow(["Tramo", "Población", "Proporción", "Muestra"]));
+  result.byAge.forEach((r) => rows.push(dataRow(r.label, r.population, r.proportion, r.sample)));
+  rows.push(emptyRow);
+
+  rows.push(titleRow("Por Región"));
+  rows.push(headerRow(["Región", "Población", "Proporción", "Muestra"]));
+  result.byRegion.forEach((r) => rows.push(dataRow(r.label, r.population, r.proportion, r.sample)));
+
+  const styles = `<Styles>
+    <Style ss:ID="h"><Font ss:Bold="1"/></Style>
+    <Style ss:ID="t"><Font ss:Bold="1" ss:Size="12"/></Style>
+  </Styles>`;
+
+  return (
+    `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">` +
+    styles +
+    `<Worksheet ss:Name="Cuotas Directas"><Table>` +
+    rows.join("") +
+    `</Table></Worksheet></Workbook>`
+  );
+}

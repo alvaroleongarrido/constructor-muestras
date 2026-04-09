@@ -22,6 +22,7 @@ import {
 import {
   calculateSample,
   exportToCSV,
+  exportToExcel,
   type SampleConfig,
   type AgeRange,
   type SampleResult,
@@ -211,11 +212,7 @@ export default function SampleDashboard() {
   }, [result]);
 
   const handleExportExcel = useCallback(() => {
-    const rows = result.quotas.map(
-      (q) =>
-        `<Row><Cell><Data ss:Type="String">${q.region}</Data></Cell><Cell><Data ss:Type="String">${q.sex}</Data></Cell><Cell><Data ss:Type="String">${q.ageRange}</Data></Cell><Cell><Data ss:Type="Number">${q.population}</Data></Cell><Cell><Data ss:Type="Number">${(q.proportion * 100).toFixed(2)}</Data></Cell><Cell><Data ss:Type="Number">${q.sample}</Data></Cell></Row>`
-    );
-    const xml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Cuotas"><Table><Row><Cell><Data ss:Type="String">Región/Zona</Data></Cell><Cell><Data ss:Type="String">Sexo</Data></Cell><Cell><Data ss:Type="String">Tramo Edad</Data></Cell><Cell><Data ss:Type="String">Población</Data></Cell><Cell><Data ss:Type="String">Proporción (%)</Data></Cell><Cell><Data ss:Type="String">Muestra</Data></Cell></Row>${rows.join("")}</Table></Worksheet></Workbook>`;
+    const xml = exportToExcel(result);
     const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
