@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CENSUS_DATA, ZONE_LABELS, type Zone } from "@/data/censo-chile-2024";
+import {
+  type PersonaCenso,
+  type PersonaGseCenso,
+  type GseComuna,
+  type Zone,
+  REGION_MAP,
+  ZONE_LABELS,
+  ZONE_REGIONS,
+  GSE_OPTIONS,
+} from "@/lib/census-types";
 import {
   calculateSample,
   exportToCSV,
@@ -27,7 +36,7 @@ import {
   Cell,
   Tooltip as RechartsTooltip,
 } from "recharts";
-import { Download, Users, Target, TrendingUp, HelpCircle, Plus, X, FileSpreadsheet } from "lucide-react";
+import { Download, Users, Target, TrendingUp, HelpCircle, Plus, X, FileSpreadsheet, Loader2 } from "lucide-react";
 
 const DEFAULT_AGE_RANGES: AgeRange[] = [
   { label: "18-29", min: 18, max: 29 },
@@ -35,13 +44,6 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
   { label: "45-59", min: 45, max: 59 },
   { label: "60+", min: 60, max: 120 },
 ];
-
-const ZONE_REGIONS: Record<Zone, string[]> = {
-  Norte: ["XV", "I", "II", "III", "IV"],
-  Centro: ["V", "VI", "VII"],
-  RM: ["XIII"],
-  Sur: ["VIII", "IX", "XIV", "X", "XI", "XII", "XVI"],
-};
 
 const CHART_COLORS = [
   "hsl(217, 91%, 60%)",
@@ -52,11 +54,41 @@ const CHART_COLORS = [
   "hsl(280, 65%, 60%)",
 ];
 
+const ALL_REGION_CODES = REGION_MAP.map((r) => r.code);
+
 export default function SampleDashboard() {
+  // Data loading
+  const [personasCenso, setPersonasCenso] = useState<PersonaCenso[] | null>(null);
+  const [personasGse, setPersonasGse] = useState<PersonaGseCenso[] | null>(null);
+  const [gseComunas, setGseComunas] = useState<GseComuna[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/personas_censo.json").then((r) => r.json()),
+      fetch("https://raw.githubusercontent.com/alvaroleongarrido/constructor-muestras/main/public/personas_gse_censo.json").then((r) => r.json()),
+      fetch("/gse_comunas.json").then((r) => r.json()),
+    ])
+      .then(([censo, gse, comunas]) => {
+        setPersonasCenso(censo);
+        setPersonasGse(gse);
+        setGseComunas(comunas);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setLoadError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  // Config state
   const [ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(120);
   const [sexFilter, setSexFilter] = useState<"both" | "male" | "female">("both");
-  const [selectedRegions, setSelectedRegions] = useState<string[]>(CENSUS_DATA.map((r) => r.code));
+  const [selectedRegions, setSelectedRegions] = useState<number[]>(ALL_REGION_CODES);
+  const [selectedComunas, setSelectedComunas] = useState<number[]>([]);
+  const [selectedGse, setSelectedGse] = useState<string[]>([]);
   const [ageRanges, setAgeRanges] = useState<AgeRange[]>(DEFAULT_AGE_RANGES);
   const [sampleSize, setSampleSize] = useState(1000);
   const [groupBy, setGroupBy] = useState<"region" | "zone">("zone");
@@ -66,12 +98,49 @@ export default function SampleDashboard() {
   const [crossAge, setCrossAge] = useState(true);
   const [crossRegion, setCrossRegion] = useState(true);
 
+  // Available comunas for selected regions
+  const availableComunas = useMemo(() => {
+    if (!gseComunas) return [];
+    return gseComunas
+      .filter((c) => selectedRegions.includes(c.region))
+      .sort((a, b) => a.nombre_comuna.localeCompare(b.nombre_comuna));
+  }, [gseComunas, selectedRegions]);
+
+  // Reset comunas when regions change
+  useEffect(() => {
+    setSelectedComunas((prev) => {
+      const validComunaCodes = new Set(availableComunas.map((c) => c.comuna));
+      const filtered = prev.filter((c) => validComunaCodes.has(c));
+      return filtered.length !== prev.length ? filtered : prev;
+    });
+  }, [availableComunas]);
+
+  // GSE distribution for selected comunas
+  const gseDistribution = useMemo(() => {
+    if (!gseComunas || selectedComunas.length === 0) return null;
+    const selected = gseComunas.filter((c) => selectedComunas.includes(c.comuna));
+    if (selected.length === 0) return null;
+    const avg = {
+      C1: selected.reduce((s, c) => s + c.pct_C1, 0) / selected.length,
+      C2: selected.reduce((s, c) => s + c.pct_C2, 0) / selected.length,
+      C3: selected.reduce((s, c) => s + c.pct_C3, 0) / selected.length,
+      D: selected.reduce((s, c) => s + c.pct_D, 0) / selected.length,
+      E: selected.reduce((s, c) => s + c.pct_E, 0) / selected.length,
+    };
+    return avg;
+  }, [gseComunas, selectedComunas]);
+
   const config: SampleConfig = useMemo(
-    () => ({ ageMin, ageMax, sexFilter, selectedRegions, ageRanges, sampleSize, groupBy }),
-    [ageMin, ageMax, sexFilter, selectedRegions, ageRanges, sampleSize, groupBy]
+    () => ({ ageMin, ageMax, sexFilter, selectedRegions, selectedComunas, selectedGse, ageRanges, sampleSize, groupBy }),
+    [ageMin, ageMax, sexFilter, selectedRegions, selectedComunas, selectedGse, ageRanges, sampleSize, groupBy]
   );
 
-  const result: SampleResult = useMemo(() => calculateSample(config), [config]);
+  const result: SampleResult = useMemo(() => {
+    if (!personasCenso || !personasGse) {
+      return { totalUniverse: 0, sampleSize: 0, marginOfError: 0, quotas: [], bySex: [], byAge: [], byRegion: [] };
+    }
+    return calculateSample(config, personasCenso, personasGse);
+  }, [config, personasCenso, personasGse]);
 
   const crossedQuotas = useMemo(() => {
     if (crossSex && crossAge && crossRegion) return result.quotas;
@@ -97,18 +166,23 @@ export default function SampleDashboard() {
     }));
   }, [result.quotas, crossSex, crossAge, crossRegion, config.sampleSize]);
 
-  const toggleZone = useCallback(
-    (zone: Zone, checked: boolean) => {
-      const zoneCodes = ZONE_REGIONS[zone];
-      setSelectedRegions((prev) =>
-        checked ? [...new Set([...prev, ...zoneCodes])] : prev.filter((c) => !zoneCodes.includes(c))
-      );
-    },
-    []
-  );
+  const toggleZone = useCallback((zone: Zone, checked: boolean) => {
+    const zoneCodes = ZONE_REGIONS[zone];
+    setSelectedRegions((prev) =>
+      checked ? [...new Set([...prev, ...zoneCodes])] : prev.filter((c) => !zoneCodes.includes(c))
+    );
+  }, []);
 
-  const toggleRegion = useCallback((code: string, checked: boolean) => {
+  const toggleRegion = useCallback((code: number, checked: boolean) => {
     setSelectedRegions((prev) => (checked ? [...prev, code] : prev.filter((c) => c !== code)));
+  }, []);
+
+  const toggleComuna = useCallback((code: number, checked: boolean) => {
+    setSelectedComunas((prev) => (checked ? [...prev, code] : prev.filter((c) => c !== code)));
+  }, []);
+
+  const toggleGse = useCallback((gse: string, checked: boolean) => {
+    setSelectedGse((prev) => (checked ? [...prev, gse] : prev.filter((g) => g !== gse)));
   }, []);
 
   const addAgeRange = useCallback(() => {
@@ -137,7 +211,6 @@ export default function SampleDashboard() {
   }, [result]);
 
   const handleExportExcel = useCallback(() => {
-    // Simple Excel XML export
     const rows = result.quotas.map(
       (q) =>
         `<Row><Cell><Data ss:Type="String">${q.region}</Data></Cell><Cell><Data ss:Type="String">${q.sex}</Data></Cell><Cell><Data ss:Type="String">${q.ageRange}</Data></Cell><Cell><Data ss:Type="Number">${q.population}</Data></Cell><Cell><Data ss:Type="Number">${(q.proportion * 100).toFixed(2)}</Data></Cell><Cell><Data ss:Type="Number">${q.sample}</Data></Cell></Row>`
@@ -157,6 +230,30 @@ export default function SampleDashboard() {
   const isZonePartiallySelected = (zone: Zone) =>
     ZONE_REGIONS[zone].some((c) => selectedRegions.includes(c)) && !isZoneFullySelected(zone);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Cargando datos del Censo 2024…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-destructive font-medium">Error al cargar datos</p>
+            <p className="text-sm text-muted-foreground mt-1">{loadError}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -167,7 +264,7 @@ export default function SampleDashboard() {
               Calculadora de Muestras
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Basado en proyecciones del Censo de Chile 2024 — INE
+              Basado en datos del Censo de Chile 2024 — INE
             </p>
           </div>
           <div className="flex gap-2">
@@ -185,7 +282,7 @@ export default function SampleDashboard() {
 
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Configuration */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Universe Config */}
           <Card>
             <CardHeader className="pb-3">
@@ -242,7 +339,7 @@ export default function SampleDashboard() {
                       <HelpCircle className="h-3 w-3" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="max-w-48 text-xs">Número total de personas a encuestar. Se distribuirá proporcionalmente según las variables seleccionadas.</p>
+                      <p className="max-w-48 text-xs">Número total de personas a encuestar. Se distribuirá proporcionalmente.</p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
@@ -266,6 +363,48 @@ export default function SampleDashboard() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* GSE Selector */}
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  Grupo Socioeconómico (GSE)
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-3 w-3" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-48 text-xs">Si seleccionas uno o más GSE, el universo se calcula solo con personas de esos grupos. Si no seleccionas ninguno, se usa el total sin filtro de GSE.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {GSE_OPTIONS.map((gse) => (
+                    <div key={gse} className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`gse-${gse}`}
+                        checked={selectedGse.includes(gse)}
+                        onCheckedChange={(checked) => toggleGse(gse, !!checked)}
+                      />
+                      <Label htmlFor={`gse-${gse}`} className="text-xs cursor-pointer">{gse}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* GSE distribution table */}
+              {gseDistribution && (
+                <div className="rounded-md border p-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Distribución GSE (comuna{selectedComunas.length > 1 ? "s" : ""} seleccionada{selectedComunas.length > 1 ? "s" : ""})</p>
+                  <div className="grid grid-cols-5 gap-1 text-center">
+                    {Object.entries(gseDistribution).map(([gse, pct]) => (
+                      <div key={gse}>
+                        <p className="text-xs font-semibold">{gse}</p>
+                        <p className="text-xs text-muted-foreground">{(pct * 100).toFixed(1)}%</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -299,7 +438,7 @@ export default function SampleDashboard() {
                       </Label>
                     </div>
                     <div className="ml-6 space-y-1">
-                      {CENSUS_DATA.filter((r) => ZONE_REGIONS[zone].includes(r.code)).map((region) => (
+                      {REGION_MAP.filter((r) => ZONE_REGIONS[zone].includes(r.code)).map((region) => (
                         <div key={region.code} className="flex items-center gap-2">
                           <Checkbox
                             id={`region-${region.code}`}
@@ -318,6 +457,49 @@ export default function SampleDashboard() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Comunas */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Comunas
+              </CardTitle>
+              <CardDescription>Opcional: filtra por comunas específicas</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {availableComunas.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Selecciona al menos una región.</p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-xs">
+                      {selectedComunas.length === 0 ? "Todas las comunas" : `${selectedComunas.length} seleccionada${selectedComunas.length > 1 ? "s" : ""}`}
+                    </Badge>
+                    {selectedComunas.length > 0 && (
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setSelectedComunas([])}>
+                        Limpiar
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                    {availableComunas.map((c) => (
+                      <div key={c.comuna} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`comuna-${c.comuna}`}
+                          checked={selectedComunas.includes(c.comuna)}
+                          onCheckedChange={(checked) => toggleComuna(c.comuna, !!checked)}
+                        />
+                        <Label htmlFor={`comuna-${c.comuna}`} className="text-xs text-muted-foreground cursor-pointer">
+                          {c.nombre_comuna}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -344,32 +526,17 @@ export default function SampleDashboard() {
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground">Desde</Label>
-                  <Input
-                    type="number"
-                    placeholder="18"
-                    value={newRangeMin}
-                    onChange={(e) => setNewRangeMin(e.target.value)}
-                  />
+                  <Input type="number" placeholder="18" value={newRangeMin} onChange={(e) => setNewRangeMin(e.target.value)} />
                 </div>
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground">Hasta</Label>
-                  <Input
-                    type="number"
-                    placeholder="29"
-                    value={newRangeMax}
-                    onChange={(e) => setNewRangeMax(e.target.value)}
-                  />
+                  <Input type="number" placeholder="29" value={newRangeMax} onChange={(e) => setNewRangeMax(e.target.value)} />
                 </div>
                 <Button variant="outline" size="icon" onClick={addAgeRange}>
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs w-full"
-                onClick={() => setAgeRanges(DEFAULT_AGE_RANGES)}
-              >
+              <Button variant="ghost" size="sm" className="text-xs w-full" onClick={() => setAgeRanges(DEFAULT_AGE_RANGES)}>
                 Restaurar tramos por defecto
               </Button>
             </CardContent>
@@ -419,9 +586,7 @@ export default function SampleDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
                   <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} domain={[0, 'auto']} />
                   <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={60} />
-                  <RechartsTooltip
-                    formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]}
-                  />
+                  <RechartsTooltip formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]} />
                   <Bar dataKey="proportion" radius={[0, 4, 4, 0]}>
                     {result.bySex.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -442,9 +607,7 @@ export default function SampleDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                  <RechartsTooltip
-                    formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]}
-                  />
+                  <RechartsTooltip formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]} />
                   <Bar dataKey="proportion" radius={[4, 4, 0, 0]}>
                     {result.byAge.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -467,9 +630,7 @@ export default function SampleDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
                   <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
                   <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} width={groupBy === "zone" ? 50 : 120} />
-                  <RechartsTooltip
-                    formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]}
-                  />
+                  <RechartsTooltip formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]} />
                   <Bar dataKey="proportion" radius={[0, 4, 4, 0]}>
                     {result.byRegion.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -487,9 +648,7 @@ export default function SampleDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-base">Tablas de Cuotas</CardTitle>
-                <CardDescription>
-                  Distribución proporcional de la muestra
-                </CardDescription>
+                <CardDescription>Distribución proporcional de la muestra</CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleExportCSV}>
@@ -512,7 +671,6 @@ export default function SampleDashboard() {
 
               {/* Direct Quotas */}
               <TabsContent value="direct" className="space-y-6">
-                {/* By Sex */}
                 {result.bySex.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-foreground mb-2">Por Sexo</h4>
@@ -541,7 +699,6 @@ export default function SampleDashboard() {
                   </div>
                 )}
 
-                {/* By Age */}
                 {result.byAge.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-foreground mb-2">Por Tramo de Edad</h4>
@@ -570,7 +727,6 @@ export default function SampleDashboard() {
                   </div>
                 )}
 
-                {/* By Region/Zone */}
                 {result.byRegion.length > 0 && (
                   <div>
                     <h4 className="text-sm font-semibold text-foreground mb-2">Por {groupBy === "zone" ? "Zona" : "Región"}</h4>
@@ -657,7 +813,7 @@ export default function SampleDashboard() {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground pb-4">
-          Fuente: Proyecciones de población INE Chile 2024. Los datos son aproximados para fines de muestreo.
+          Fuente: Censo de población y vivienda INE Chile 2024. Datos reales a nivel de comuna, sexo y edad.
         </p>
       </div>
     </div>
