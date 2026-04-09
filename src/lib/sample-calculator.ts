@@ -1,4 +1,11 @@
-import { CENSUS_DATA, type RegionData, type Zone } from "@/data/censo-chile-2024";
+import {
+  type PersonaCenso,
+  type PersonaGseCenso,
+  type Zone,
+  getRegionName,
+  getRegionZone,
+  ZONE_LABELS,
+} from "./census-types";
 
 export interface AgeRange {
   label: string;
@@ -10,7 +17,9 @@ export interface SampleConfig {
   ageMin: number;
   ageMax: number;
   sexFilter: "both" | "male" | "female";
-  selectedRegions: string[]; // region codes
+  selectedRegions: number[];
+  selectedComunas: number[]; // empty = all comunas in region
+  selectedGse: string[]; // empty = no GSE filter (use personas_censo)
   ageRanges: AgeRange[];
   sampleSize: number;
   groupBy: "region" | "zone";
@@ -18,7 +27,7 @@ export interface SampleConfig {
 
 export interface QuotaRow {
   region: string;
-  regionCode: string;
+  regionCode: number;
   zone: Zone;
   sex: string;
   ageRange: string;
@@ -37,61 +46,77 @@ export interface SampleResult {
   byRegion: { label: string; population: number; proportion: number; sample: number }[];
 }
 
-function getPopulationForAgeRange(
-  region: RegionData,
-  ageMin: number,
-  ageMax: number,
-  sexFilter: "both" | "male" | "female"
-): number {
-  let total = 0;
-  for (const ag of region.population) {
-    // Check overlap
-    if (ag.ageMax < ageMin || ag.ageMin > ageMax) continue;
-
-    const overlapMin = Math.max(ag.ageMin, ageMin);
-    const overlapMax = Math.min(ag.ageMax, ageMax);
-    const groupSpan = ag.ageMax - ag.ageMin + 1;
-    const overlapSpan = overlapMax - overlapMin + 1;
-    const fraction = overlapSpan / groupSpan;
-
-    if (sexFilter === "male") {
-      total += Math.round(ag.male * fraction);
-    } else if (sexFilter === "female") {
-      total += Math.round(ag.female * fraction);
-    } else {
-      total += Math.round((ag.male + ag.female) * fraction);
-    }
-  }
-  return total;
+function filterData(
+  personas: PersonaCenso[],
+  config: SampleConfig
+): PersonaCenso[] {
+  return personas.filter((p) => {
+    if (!config.selectedRegions.includes(p.region)) return false;
+    if (config.selectedComunas.length > 0 && !config.selectedComunas.includes(p.comuna)) return false;
+    if (p.edad < config.ageMin || p.edad > config.ageMax) return false;
+    if (config.sexFilter === "male" && p.sexo !== 1) return false;
+    if (config.sexFilter === "female" && p.sexo !== 2) return false;
+    return true;
+  });
 }
 
-export function calculateSample(config: SampleConfig): SampleResult {
-  const regions = CENSUS_DATA.filter((r) => config.selectedRegions.includes(r.code));
+function filterGseData(
+  personasGse: PersonaGseCenso[],
+  config: SampleConfig
+): PersonaGseCenso[] {
+  return personasGse.filter((p) => {
+    if (!config.selectedRegions.includes(p.region)) return false;
+    if (config.selectedComunas.length > 0 && !config.selectedComunas.includes(p.comuna)) return false;
+    if (p.edad < config.ageMin || p.edad > config.ageMax) return false;
+    if (config.sexFilter === "male" && p.sexo !== 1) return false;
+    if (config.sexFilter === "female" && p.sexo !== 2) return false;
+    if (!config.selectedGse.includes(p.gse)) return false;
+    return true;
+  });
+}
 
-  // Build quota rows
+export function calculateSample(
+  config: SampleConfig,
+  personasCenso: PersonaCenso[],
+  personasGse: PersonaGseCenso[]
+): SampleResult {
+  const useGse = config.selectedGse.length > 0;
+
+  // Build quota rows from raw data
   const quotas: QuotaRow[] = [];
-  const sexes: ("male" | "female")[] =
-    config.sexFilter === "both"
-      ? ["male", "female"]
-      : config.sexFilter === "male"
-        ? ["male"]
-        : ["female"];
+  const sexes: number[] =
+    config.sexFilter === "both" ? [1, 2] : config.sexFilter === "male" ? [1] : [2];
 
-  for (const region of regions) {
-    for (const sex of sexes) {
+  // Pre-filter data once
+  const filtered = useGse
+    ? filterGseData(personasGse, config)
+    : filterData(personasCenso, config);
+
+  // Group by region, sex, ageRange
+  for (const regionCode of config.selectedRegions) {
+    const zone = getRegionZone(regionCode);
+    const regionLabel = config.groupBy === "zone" ? ZONE_LABELS[zone] : getRegionName(regionCode);
+
+    for (const sexCode of sexes) {
       for (const ageRange of config.ageRanges) {
         const clampedMin = Math.max(ageRange.min, config.ageMin);
         const clampedMax = Math.min(ageRange.max, config.ageMax);
         if (clampedMin > clampedMax) continue;
 
-        const pop = getPopulationForAgeRange(region, clampedMin, clampedMax, sex);
+        let pop = 0;
+        for (const p of filtered) {
+          if (p.region !== regionCode) continue;
+          if (p.sexo !== sexCode) continue;
+          if (p.edad < clampedMin || p.edad > clampedMax) continue;
+          pop += useGse ? (p as unknown as PersonaGseCenso).n_personas_gse : (p as PersonaCenso).n_personas;
+        }
         if (pop === 0) continue;
 
         quotas.push({
-          region: config.groupBy === "zone" ? region.zone : region.name,
-          regionCode: region.code,
-          zone: region.zone,
-          sex: sex === "male" ? "Hombre" : "Mujer",
+          region: regionLabel,
+          regionCode,
+          zone,
+          sex: sexCode === 1 ? "Hombre" : "Mujer",
           ageRange: ageRange.label,
           population: pop,
           proportion: 0,
@@ -119,13 +144,12 @@ export function calculateSample(config: SampleConfig): SampleResult {
 
   const totalUniverse = quotas.reduce((s, q) => s + q.population, 0);
 
-  // Calculate proportions and sample allocation
   for (const q of quotas) {
     q.proportion = totalUniverse > 0 ? q.population / totalUniverse : 0;
     q.sample = Math.round(q.proportion * config.sampleSize);
   }
 
-  // Fix rounding: adjust largest group
+  // Fix rounding
   const sampleSum = quotas.reduce((s, q) => s + q.sample, 0);
   if (quotas.length > 0 && sampleSum !== config.sampleSize) {
     const diff = config.sampleSize - sampleSum;
@@ -136,7 +160,8 @@ export function calculateSample(config: SampleConfig): SampleResult {
   // Margin of error (95% confidence, p=0.5)
   const marginOfError =
     totalUniverse > 0
-      ? (1.96 * Math.sqrt(0.25 / config.sampleSize) *
+      ? (1.96 *
+          Math.sqrt(0.25 / config.sampleSize) *
           Math.sqrt((totalUniverse - config.sampleSize) / (totalUniverse - 1))) *
         100
       : 0;
