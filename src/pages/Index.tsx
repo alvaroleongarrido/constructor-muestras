@@ -23,8 +23,10 @@ import {
   calculateSample,
   exportToCSV,
   exportToExcel,
+  marginOfErrorRow,
   type SampleConfig,
   type AgeRange,
+  type GseGroup,
   type SampleResult,
 } from "@/lib/sample-calculator";
 import {
@@ -40,6 +42,7 @@ import {
 import { Download, Users, Target, TrendingUp, HelpCircle, Plus, X, FileSpreadsheet, Loader2 } from "lucide-react";
 
 const DEFAULT_AGE_RANGES: AgeRange[] = [
+  { label: "1-17", min: 1, max: 17 },
   { label: "18-29", min: 18, max: 29 },
   { label: "30-44", min: 30, max: 44 },
   { label: "45-59", min: 45, max: 59 },
@@ -84,78 +87,93 @@ export default function SampleDashboard() {
   }, []);
 
   // Config state
-  const [ageMin, setAgeMin] = useState(18);
+  const [ageMin, setAgeMin] = useState(1);
   const [ageMax, setAgeMax] = useState(120);
   const [sexFilter, setSexFilter] = useState<"both" | "male" | "female">("both");
   const [selectedRegions, setSelectedRegions] = useState<number[]>(ALL_REGION_CODES);
   const [selectedComunas, setSelectedComunas] = useState<number[]>([]);
   const [selectedGse, setSelectedGse] = useState<string[]>([]);
   const [ageRanges, setAgeRanges] = useState<AgeRange[]>(DEFAULT_AGE_RANGES);
+  const [gseGroups, setGseGroups] = useState<GseGroup[]>([]);
   const [sampleSize, setSampleSize] = useState(1000);
-  const [groupBy, setGroupBy] = useState<"region" | "zone">("zone");
+  const [groupBy, setGroupBy] = useState<"region" | "zone" | "comuna">("zone");
   const [newRangeMin, setNewRangeMin] = useState("");
   const [newRangeMax, setNewRangeMax] = useState("");
+  const [newGseGroupName, setNewGseGroupName] = useState("");
+  const [newGseGroupCats, setNewGseGroupCats] = useState<string[]>([]);
   const [crossSex, setCrossSex] = useState(true);
   const [crossAge, setCrossAge] = useState(true);
   const [crossRegion, setCrossRegion] = useState(true);
+  const [crossGse, setCrossGse] = useState(false);
 
-  // Available comunas for selected regions
-  const availableComunas = useMemo(() => {
-    if (!gseComunas) return [];
+  // For comuna groupBy mode: single region + single comuna
+  const [comunaRegion, setComunaRegion] = useState<number | null>(null);
+
+  // Available comunas for comuna mode
+  const availableComunasForMode = useMemo(() => {
+    if (!gseComunas || groupBy !== "comuna" || comunaRegion === null) return [];
     return gseComunas
-      .filter((c) => selectedRegions.includes(c.region))
-      .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""))
-  }, [gseComunas, selectedRegions]);
-
-  // Reset comunas when regions change
-  useEffect(() => {
-    setSelectedComunas((prev) => {
-      const validComunaCodes = new Set(availableComunas.map((c) => c.comuna));
-      const filtered = prev.filter((c) => validComunaCodes.has(c));
-      return filtered.length !== prev.length ? filtered : prev;
-    });
-  }, [availableComunas]);
+      .filter((c) => c.region === comunaRegion && c.nombre_comuna != null && c.nombre_comuna !== "")
+      .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
+  }, [gseComunas, groupBy, comunaRegion]);
 
   // GSE distribution for selected comunas
   const gseDistribution = useMemo(() => {
     if (!gseComunas || selectedComunas.length === 0) return null;
     const selected = gseComunas.filter((c) => selectedComunas.includes(c.comuna));
     if (selected.length === 0) return null;
-    const avg = {
+    return {
       C1: selected.reduce((s, c) => s + c.pct_C1, 0) / selected.length,
       C2: selected.reduce((s, c) => s + c.pct_C2, 0) / selected.length,
       C3: selected.reduce((s, c) => s + c.pct_C3, 0) / selected.length,
       D: selected.reduce((s, c) => s + c.pct_D, 0) / selected.length,
       E: selected.reduce((s, c) => s + c.pct_E, 0) / selected.length,
     };
-    return avg;
   }, [gseComunas, selectedComunas]);
 
+  // Effective regions and comunas based on groupBy mode
+  const effectiveRegions = useMemo(() => {
+    if (groupBy === "comuna" && comunaRegion !== null) return [comunaRegion];
+    return selectedRegions;
+  }, [groupBy, comunaRegion, selectedRegions]);
+
+  const effectiveComunas = useMemo(() => {
+    if (groupBy === "comuna") return selectedComunas;
+    return [];
+  }, [groupBy, selectedComunas]);
+
   const config: SampleConfig = useMemo(
-    () => ({ ageMin, ageMax, sexFilter, selectedRegions, selectedComunas, selectedGse, ageRanges, sampleSize, groupBy }),
-    [ageMin, ageMax, sexFilter, selectedRegions, selectedComunas, selectedGse, ageRanges, sampleSize, groupBy]
+    () => ({
+      ageMin, ageMax, sexFilter,
+      selectedRegions: effectiveRegions,
+      selectedComunas: effectiveComunas,
+      selectedGse, ageRanges, gseGroups, sampleSize, groupBy,
+    }),
+    [ageMin, ageMax, sexFilter, effectiveRegions, effectiveComunas, selectedGse, ageRanges, gseGroups, sampleSize, groupBy]
   );
 
   const result: SampleResult = useMemo(() => {
-    if (!personasCenso || !personasGse) {
-      return { totalUniverse: 0, sampleSize: 0, marginOfError: 0, quotas: [], bySex: [], byAge: [], byRegion: [] };
+    if (!personasCenso || !personasGse || !gseComunas) {
+      return { totalUniverse: 0, sampleSize: 0, marginOfError: 0, quotas: [], bySex: [], byAge: [], byRegion: [], byGse: [] };
     }
-    return calculateSample(config, personasCenso, personasGse);
-  }, [config, personasCenso, personasGse]);
+    return calculateSample(config, personasCenso, personasGse, gseComunas);
+  }, [config, personasCenso, personasGse, gseComunas]);
 
   const crossedQuotas = useMemo(() => {
-    if (crossSex && crossAge && crossRegion) return result.quotas;
-    const grouped = new Map<string, { region: string; sex: string; ageRange: string; population: number }>();
+    const useGse = selectedGse.length > 0;
+    if (crossSex && crossAge && crossRegion && (!useGse || crossGse)) return result.quotas;
+    const grouped = new Map<string, { region: string; sex: string; ageRange: string; gse: string; population: number }>();
     for (const q of result.quotas) {
       const regionVal = crossRegion ? q.region : "Todos";
       const sexVal = crossSex ? q.sex : "Todos";
       const ageVal = crossAge ? q.ageRange : "Todos";
-      const key = `${regionVal}|${sexVal}|${ageVal}`;
+      const gseVal = (useGse && crossGse) ? q.gse : "Todos";
+      const key = `${regionVal}|${sexVal}|${ageVal}|${gseVal}`;
       const existing = grouped.get(key);
       if (existing) {
         existing.population += q.population;
       } else {
-        grouped.set(key, { region: regionVal, sex: sexVal, ageRange: ageVal, population: q.population });
+        grouped.set(key, { region: regionVal, sex: sexVal, ageRange: ageVal, gse: gseVal, population: q.population });
       }
     }
     const rows = Array.from(grouped.values());
@@ -165,7 +183,7 @@ export default function SampleDashboard() {
       proportion: total > 0 ? r.population / total : 0,
       sample: Math.round((r.population / (total || 1)) * config.sampleSize),
     }));
-  }, [result.quotas, crossSex, crossAge, crossRegion, config.sampleSize]);
+  }, [result.quotas, crossSex, crossAge, crossRegion, crossGse, config.sampleSize, selectedGse.length]);
 
   const toggleZone = useCallback((zone: Zone, checked: boolean) => {
     const zoneCodes = ZONE_REGIONS[zone];
@@ -176,10 +194,6 @@ export default function SampleDashboard() {
 
   const toggleRegion = useCallback((code: number, checked: boolean) => {
     setSelectedRegions((prev) => (checked ? [...prev, code] : prev.filter((c) => c !== code)));
-  }, []);
-
-  const toggleComuna = useCallback((code: number, checked: boolean) => {
-    setSelectedComunas((prev) => (checked ? [...prev, code] : prev.filter((c) => c !== code)));
   }, []);
 
   const toggleGse = useCallback((gse: string, checked: boolean) => {
@@ -198,6 +212,18 @@ export default function SampleDashboard() {
 
   const removeAgeRange = useCallback((index: number) => {
     setAgeRanges((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const addGseGroup = useCallback(() => {
+    if (newGseGroupName.trim() && newGseGroupCats.length > 0) {
+      setGseGroups((prev) => [...prev, { label: newGseGroupName.trim(), categories: [...newGseGroupCats] }]);
+      setNewGseGroupName("");
+      setNewGseGroupCats([]);
+    }
+  }, [newGseGroupName, newGseGroupCats]);
+
+  const removeGseGroup = useCallback((index: number) => {
+    setGseGroups((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const handleExportCSV = useCallback(() => {
@@ -227,6 +253,9 @@ export default function SampleDashboard() {
   const isZonePartiallySelected = (zone: Zone) =>
     ZONE_REGIONS[zone].some((c) => selectedRegions.includes(c)) && !isZoneFullySelected(zone);
 
+  const hasGse = selectedGse.length > 0;
+  const geoLabel = groupBy === "zone" ? "Zona" : groupBy === "region" ? "Región" : "Comuna";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -250,6 +279,37 @@ export default function SampleDashboard() {
       </div>
     );
   }
+
+  // Helper to render a summary table with margin of error
+  const renderSummaryTable = (title: string, labelHeader: string, data: typeof result.bySex) => (
+    <div>
+      <h4 className="text-sm font-semibold text-foreground mb-2">{title}</h4>
+      <div className="rounded-md border overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">{labelHeader}</TableHead>
+              <TableHead className="font-semibold text-right">Población</TableHead>
+              <TableHead className="font-semibold text-right">Proporción</TableHead>
+              <TableHead className="font-semibold text-right">Muestra</TableHead>
+              <TableHead className="font-semibold text-right">Margen de Error</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((row, i) => (
+              <TableRow key={i}>
+                <TableCell className="text-sm">{row.label}</TableCell>
+                <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
+                <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
+                <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
+                <TableCell className="text-sm text-right font-mono text-muted-foreground">{marginOfErrorRow(row.sample)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -296,9 +356,9 @@ export default function SampleDashboard() {
                   <Input
                     type="number"
                     value={ageMin}
-                    onChange={(e) => setAgeMin(parseInt(e.target.value) || 0)}
-                    min={0}
-                    max={120}
+                    onChange={(e) => setAgeMin(Math.max(1, parseInt(e.target.value) || 1))}
+                    min={1}
+                    max={85}
                   />
                 </div>
                 <div>
@@ -308,7 +368,7 @@ export default function SampleDashboard() {
                     value={ageMax === 120 ? "" : ageMax}
                     placeholder="Sin límite"
                     onChange={(e) => setAgeMax(e.target.value ? parseInt(e.target.value) : 120)}
-                    min={0}
+                    min={1}
                     max={120}
                   />
                 </div>
@@ -350,16 +410,63 @@ export default function SampleDashboard() {
 
               <div>
                 <Label className="text-xs text-muted-foreground">Agrupar por</Label>
-                <Select value={groupBy} onValueChange={(v) => setGroupBy(v as typeof groupBy)}>
+                <Select value={groupBy} onValueChange={(v) => {
+                  setGroupBy(v as typeof groupBy);
+                  if (v === "comuna") {
+                    setComunaRegion(null);
+                    setSelectedComunas([]);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="zone">Zona</SelectItem>
                     <SelectItem value="region">Región</SelectItem>
+                    <SelectItem value="comuna">Comuna</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Comuna mode: select region then comuna */}
+              {groupBy === "comuna" && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Región</Label>
+                    <Select value={comunaRegion?.toString() ?? ""} onValueChange={(v) => {
+                      setComunaRegion(parseInt(v));
+                      setSelectedComunas([]);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona una región" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REGION_MAP.map((r) => (
+                          <SelectItem key={r.code} value={r.code.toString()}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {comunaRegion !== null && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Comuna</Label>
+                      <Select
+                        value={selectedComunas[0]?.toString() ?? ""}
+                        onValueChange={(v) => setSelectedComunas([parseInt(v)])}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona una comuna" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableComunasForMode.map((c) => (
+                            <SelectItem key={c.comuna} value={c.comuna.toString()}>{c.nombre_comuna}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* GSE Selector */}
               <div>
@@ -370,7 +477,7 @@ export default function SampleDashboard() {
                       <HelpCircle className="h-3 w-3" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="max-w-48 text-xs">Si seleccionas uno o más GSE, el universo se calcula solo con personas de esos grupos. Si no seleccionas ninguno, se usa el total sin filtro de GSE.</p>
+                      <p className="max-w-48 text-xs">Si seleccionas uno o más GSE, el universo se calcula solo con personas de esos grupos y GSE se agrega como dimensión de análisis.</p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
@@ -386,12 +493,15 @@ export default function SampleDashboard() {
                     </div>
                   ))}
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-2 leading-tight">
+                  La distribución de GSE se aplica a nivel comunal con proporción uniforme entre grupos de edad y sexo (fuente: AIM 2023).
+                </p>
               </div>
 
               {/* GSE distribution table */}
               {gseDistribution && (
                 <div className="rounded-md border p-2">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Distribución GSE (comuna{selectedComunas.length > 1 ? "s" : ""} seleccionada{selectedComunas.length > 1 ? "s" : ""})</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Distribución GSE (comuna seleccionada)</p>
                   <div className="grid grid-cols-5 gap-1 text-center">
                     {Object.entries(gseDistribution).map(([gse, pct]) => (
                       <div key={gse}>
@@ -405,100 +515,59 @@ export default function SampleDashboard() {
             </CardContent>
           </Card>
 
-          {/* Regions */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                Regiones / Zonas
-              </CardTitle>
-              <CardDescription>Selecciona las regiones a incluir</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                {(Object.keys(ZONE_REGIONS) as Zone[]).map((zone) => (
-                  <div key={zone}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <Checkbox
-                        id={`zone-${zone}`}
-                        checked={isZoneFullySelected(zone)}
-                        ref={(el) => {
-                          if (el) {
-                            (el as unknown as HTMLButtonElement).dataset.state =
-                              isZonePartiallySelected(zone) ? "indeterminate" : isZoneFullySelected(zone) ? "checked" : "unchecked";
-                          }
-                        }}
-                        onCheckedChange={(checked) => toggleZone(zone, !!checked)}
-                      />
-                      <Label htmlFor={`zone-${zone}`} className="text-sm font-medium cursor-pointer">
-                        {ZONE_LABELS[zone]}
-                      </Label>
-                    </div>
-                    <div className="ml-6 space-y-1">
-                      {REGION_MAP.filter((r) => ZONE_REGIONS[zone].includes(r.code)).map((region) => (
-                        <div key={region.code} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`region-${region.code}`}
-                            checked={selectedRegions.includes(region.code)}
-                            onCheckedChange={(checked) => toggleRegion(region.code, !!checked)}
-                          />
-                          <Label
-                            htmlFor={`region-${region.code}`}
-                            className="text-xs text-muted-foreground cursor-pointer"
-                          >
-                            {region.name}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Comunas */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                Comunas
-              </CardTitle>
-              <CardDescription>Opcional: filtra por comunas específicas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {availableComunas.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Selecciona al menos una región.</p>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      {selectedComunas.length === 0 ? "Todas las comunas" : `${selectedComunas.length} seleccionada${selectedComunas.length > 1 ? "s" : ""}`}
-                    </Badge>
-                    {selectedComunas.length > 0 && (
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setSelectedComunas([])}>
-                        Limpiar
-                      </Button>
-                    )}
-                  </div>
-                  <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
-                    {availableComunas.map((c) => (
-                      <div key={c.comuna} className="flex items-center gap-2">
+          {/* Regions - hidden in comuna mode */}
+          {groupBy !== "comuna" && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  Regiones / Zonas
+                </CardTitle>
+                <CardDescription>Selecciona las regiones a incluir</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {(Object.keys(ZONE_REGIONS) as Zone[]).map((zone) => (
+                    <div key={zone}>
+                      <div className="flex items-center gap-2 mb-1">
                         <Checkbox
-                          id={`comuna-${c.comuna}`}
-                          checked={selectedComunas.includes(c.comuna)}
-                          onCheckedChange={(checked) => toggleComuna(c.comuna, !!checked)}
+                          id={`zone-${zone}`}
+                          checked={isZoneFullySelected(zone)}
+                          ref={(el) => {
+                            if (el) {
+                              (el as unknown as HTMLButtonElement).dataset.state =
+                                isZonePartiallySelected(zone) ? "indeterminate" : isZoneFullySelected(zone) ? "checked" : "unchecked";
+                            }
+                          }}
+                          onCheckedChange={(checked) => toggleZone(zone, !!checked)}
                         />
-                        <Label htmlFor={`comuna-${c.comuna}`} className="text-xs text-muted-foreground cursor-pointer">
-                          {c.nombre_comuna}
+                        <Label htmlFor={`zone-${zone}`} className="text-sm font-medium cursor-pointer">
+                          {ZONE_LABELS[zone]}
                         </Label>
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                      <div className="ml-6 space-y-1">
+                        {REGION_MAP.filter((r) => ZONE_REGIONS[zone].includes(r.code)).map((region) => (
+                          <div key={region.code} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`region-${region.code}`}
+                              checked={selectedRegions.includes(region.code)}
+                              onCheckedChange={(checked) => toggleRegion(region.code, !!checked)}
+                            />
+                            <Label
+                              htmlFor={`region-${region.code}`}
+                              className="text-xs text-muted-foreground cursor-pointer"
+                            >
+                              {region.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Age Ranges */}
           <Card>
@@ -523,7 +592,7 @@ export default function SampleDashboard() {
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground">Desde</Label>
-                  <Input type="number" placeholder="18" value={newRangeMin} onChange={(e) => setNewRangeMin(e.target.value)} />
+                  <Input type="number" placeholder="1" value={newRangeMin} onChange={(e) => setNewRangeMin(e.target.value)} />
                 </div>
                 <div className="flex-1">
                   <Label className="text-xs text-muted-foreground">Hasta</Label>
@@ -538,6 +607,57 @@ export default function SampleDashboard() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* GSE Groups */}
+          {hasGse && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Agrupar GSE
+                </CardTitle>
+                <CardDescription>Agrupa categorías GSE con nombre libre</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {gseGroups.map((g, i) => (
+                    <Badge key={i} variant="secondary" className="gap-1 text-sm">
+                      {g.label} ({g.categories.join("+")})
+                      <button onClick={() => removeGseGroup(i)} className="hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Nombre del grupo</Label>
+                  <Input placeholder="Ej: ABC1" value={newGseGroupName} onChange={(e) => setNewGseGroupName(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Categorías</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {selectedGse.map((gse) => (
+                      <div key={gse} className="flex items-center gap-1">
+                        <Checkbox
+                          id={`gse-group-${gse}`}
+                          checked={newGseGroupCats.includes(gse)}
+                          onCheckedChange={(checked) =>
+                            setNewGseGroupCats((prev) =>
+                              checked ? [...prev, gse] : prev.filter((g) => g !== gse)
+                            )
+                          }
+                        />
+                        <Label htmlFor={`gse-group-${gse}`} className="text-xs cursor-pointer">{gse}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={addGseGroup}>
+                  <Plus className="h-3 w-3 mr-1" /> Agregar grupo
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Summary Cards */}
@@ -572,7 +692,7 @@ export default function SampleDashboard() {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 gap-6 ${hasGse ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Distribución por Sexo</CardTitle>
@@ -617,9 +737,7 @@ export default function SampleDashboard() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">
-                Distribución por {groupBy === "zone" ? "Zona" : "Región"}
-              </CardTitle>
+              <CardTitle className="text-sm">Distribución por {geoLabel}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={180}>
@@ -637,6 +755,29 @@ export default function SampleDashboard() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+
+          {hasGse && result.byGse.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Distribución por GSE</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={result.byGse}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                    <RechartsTooltip formatter={(value: number) => [`${(value * 100).toFixed(1)}%`, "Proporción"]} />
+                    <Bar dataKey="proportion" radius={[4, 4, 0, 0]}>
+                      {result.byGse.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Quota Tables */}
@@ -668,89 +809,10 @@ export default function SampleDashboard() {
 
               {/* Direct Quotas */}
               <TabsContent value="direct" className="space-y-6">
-                {result.bySex.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground mb-2">Por Sexo</h4>
-                    <div className="rounded-md border overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead className="font-semibold">Sexo</TableHead>
-                            <TableHead className="font-semibold text-right">Población</TableHead>
-                            <TableHead className="font-semibold text-right">Proporción</TableHead>
-                            <TableHead className="font-semibold text-right">Muestra</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {result.bySex.map((row, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="text-sm">{row.label}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
-                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-
-                {result.byAge.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground mb-2">Por Tramo de Edad</h4>
-                    <div className="rounded-md border overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead className="font-semibold">Tramo</TableHead>
-                            <TableHead className="font-semibold text-right">Población</TableHead>
-                            <TableHead className="font-semibold text-right">Proporción</TableHead>
-                            <TableHead className="font-semibold text-right">Muestra</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {result.byAge.map((row, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="text-sm">{row.label}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
-                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-
-                {result.byRegion.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-foreground mb-2">Por {groupBy === "zone" ? "Zona" : "Región"}</h4>
-                    <div className="rounded-md border overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50">
-                            <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>
-                            <TableHead className="font-semibold text-right">Población</TableHead>
-                            <TableHead className="font-semibold text-right">Proporción</TableHead>
-                            <TableHead className="font-semibold text-right">Muestra</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {result.byRegion.map((row, i) => (
-                            <TableRow key={i}>
-                              <TableCell className="text-sm">{row.label}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{row.population.toLocaleString("es-CL")}</TableCell>
-                              <TableCell className="text-sm text-right font-mono">{(row.proportion * 100).toFixed(2)}%</TableCell>
-                              <TableCell className="text-sm text-right font-mono font-semibold text-primary">{row.sample}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
+                {result.bySex.length > 0 && renderSummaryTable("Por Sexo", "Sexo", result.bySex)}
+                {result.byAge.length > 0 && renderSummaryTable("Por Tramo de Edad", "Tramo", result.byAge)}
+                {result.byRegion.length > 0 && renderSummaryTable(`Por ${geoLabel}`, geoLabel, result.byRegion)}
+                {hasGse && result.byGse.length > 0 && renderSummaryTable("Por GSE", "Categoría", result.byGse)}
               </TabsContent>
 
               {/* Crossed Quotas */}
@@ -767,10 +829,16 @@ export default function SampleDashboard() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Checkbox id="cross-region" checked={crossRegion} onCheckedChange={(v) => setCrossRegion(!!v)} />
-                    <Label htmlFor="cross-region" className="text-sm cursor-pointer">{groupBy === "zone" ? "Zona" : "Región"}</Label>
+                    <Label htmlFor="cross-region" className="text-sm cursor-pointer">{geoLabel}</Label>
                   </div>
+                  {hasGse && (
+                    <div className="flex items-center gap-2">
+                      <Checkbox id="cross-gse" checked={crossGse} onCheckedChange={(v) => setCrossGse(!!v)} />
+                      <Label htmlFor="cross-gse" className="text-sm cursor-pointer">GSE</Label>
+                    </div>
+                  )}
                 </div>
-                {(!crossSex && !crossAge && !crossRegion) ? (
+                {(!crossSex && !crossAge && !crossRegion && !crossGse) ? (
                   <p className="text-sm text-muted-foreground">Selecciona al menos una variable para cruzar.</p>
                 ) : (
                   <>
@@ -779,12 +847,14 @@ export default function SampleDashboard() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            {crossRegion && <TableHead className="font-semibold">{groupBy === "zone" ? "Zona" : "Región"}</TableHead>}
+                            {crossRegion && <TableHead className="font-semibold">{geoLabel}</TableHead>}
                             {crossSex && <TableHead className="font-semibold">Sexo</TableHead>}
                             {crossAge && <TableHead className="font-semibold">Tramo Edad</TableHead>}
+                            {hasGse && crossGse && <TableHead className="font-semibold">GSE</TableHead>}
                             <TableHead className="font-semibold text-right">Población</TableHead>
                             <TableHead className="font-semibold text-right">Proporción</TableHead>
                             <TableHead className="font-semibold text-right">Muestra</TableHead>
+                            <TableHead className="font-semibold text-right">Margen de Error</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -793,9 +863,11 @@ export default function SampleDashboard() {
                               {crossRegion && <TableCell className="text-sm">{q.region}</TableCell>}
                               {crossSex && <TableCell className="text-sm">{q.sex}</TableCell>}
                               {crossAge && <TableCell className="text-sm">{q.ageRange}</TableCell>}
+                              {hasGse && crossGse && <TableCell className="text-sm">{q.gse}</TableCell>}
                               <TableCell className="text-sm text-right font-mono">{q.population.toLocaleString("es-CL")}</TableCell>
                               <TableCell className="text-sm text-right font-mono">{(q.proportion * 100).toFixed(2)}%</TableCell>
                               <TableCell className="text-sm text-right font-mono font-semibold text-primary">{q.sample}</TableCell>
+                              <TableCell className="text-sm text-right font-mono text-muted-foreground">{marginOfErrorRow(q.sample)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
