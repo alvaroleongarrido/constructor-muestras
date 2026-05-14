@@ -660,28 +660,31 @@ export default function SampleDashboard() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Universo Total</p>
-              <p className="text-3xl font-bold text-foreground mt-1">
+              <p className="eyebrow">Universo Total</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 {result.totalUniverse.toLocaleString("es-CL")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">personas en población objetivo</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Tamaño de Muestra</p>
-              <p className="text-3xl font-bold text-primary mt-1">
+              <p className="eyebrow">Tamaño de Muestra</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 {result.sampleSize.toLocaleString("es-CL")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">encuestas a realizar</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Margen de Error</p>
-              <p className="text-3xl font-bold text-foreground mt-1">
+              <p className="eyebrow">Margen de Error</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 ±{result.marginOfError.toFixed(1)}%
               </p>
               <p className="text-xs text-muted-foreground mt-1">al 95% de confianza</p>
