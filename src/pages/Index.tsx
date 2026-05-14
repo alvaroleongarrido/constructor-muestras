@@ -170,8 +170,9 @@ export default function SampleDashboard() {
       selectedRegions: effectiveRegions,
       selectedComunas: effectiveComunas,
       selectedGse, ageRanges, gseGroups, sampleSize, groupBy,
+      allowedComunas,
     }),
-    [ageMin, ageMax, sexFilter, effectiveRegions, effectiveComunas, selectedGse, ageRanges, gseGroups, sampleSize, groupBy]
+    [ageMin, ageMax, sexFilter, effectiveRegions, effectiveComunas, selectedGse, ageRanges, gseGroups, sampleSize, groupBy, allowedComunas]
   );
 
   const result: SampleResult = useMemo(() => {
