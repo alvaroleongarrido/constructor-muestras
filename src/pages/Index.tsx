@@ -518,18 +518,64 @@ export default function SampleDashboard() {
             </CardContent>
           </Card>
 
-          {/* Regions - hidden in comuna mode */}
-          {groupBy !== "comuna" && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  Regiones / Zonas
-                </CardTitle>
-                <CardDescription>Selecciona las regiones a incluir</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+          {/* Regions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Regiones / Zonas
+              </CardTitle>
+              <CardDescription>Agrupación geográfica y filtros</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Agrupar por</Label>
+                <Select value={groupBy} onValueChange={(v) => {
+                  setGroupBy(v as typeof groupBy);
+                  if (v === "comuna") {
+                    setComunaRegion(null);
+                    setSelectedComunas([]);
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zone">Zona</SelectItem>
+                    <SelectItem value="region">Región</SelectItem>
+                    <SelectItem value="comuna">Comuna</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  Población mínima de comuna
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-3 w-3" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-56 text-xs">Excluye comunas cuya población total sea menor al umbral. Deja en 0 para incluir todas.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="Sin filtro"
+                  value={minComunaPop || ""}
+                  onChange={(e) => setMinComunaPop(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+                {allowedComunas && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {allowedComunas.length} comunas cumplen el umbral.
+                  </p>
+                )}
+              </div>
+
+              {groupBy !== "comuna" && (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1 border-t pt-3">
                   {(Object.keys(ZONE_REGIONS) as Zone[]).map((zone) => (
                     <div key={zone}>
                       <div className="flex items-center gap-2 mb-1">
@@ -568,9 +614,10 @@ export default function SampleDashboard() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
+
 
           {/* Age Ranges */}
           <Card>
