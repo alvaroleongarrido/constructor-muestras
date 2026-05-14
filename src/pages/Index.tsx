@@ -110,13 +110,34 @@ export default function SampleDashboard() {
   // For comuna groupBy mode: single region + single comuna
   const [comunaRegion, setComunaRegion] = useState<number | null>(null);
 
+  // Population per comuna (total, all ages/sexes) — used for the "min population" filter
+  const comunaPopulations = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!personasCenso) return map;
+    for (const p of personasCenso) {
+      map.set(p.comuna, (map.get(p.comuna) || 0) + p.n_personas);
+    }
+    return map;
+  }, [personasCenso]);
+
+  const allowedComunas = useMemo<number[] | null>(() => {
+    if (!minComunaPop || minComunaPop <= 0) return null;
+    const out: number[] = [];
+    for (const [code, pop] of comunaPopulations) {
+      if (pop >= minComunaPop) out.push(code);
+    }
+    return out;
+  }, [comunaPopulations, minComunaPop]);
+
   // Available comunas for comuna mode
   const availableComunasForMode = useMemo(() => {
     if (!gseComunas || groupBy !== "comuna" || comunaRegion === null) return [];
+    const allowedSet = allowedComunas ? new Set(allowedComunas) : null;
     return gseComunas
       .filter((c) => c.region === comunaRegion && c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => !allowedSet || allowedSet.has(c.comuna))
       .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
-  }, [gseComunas, groupBy, comunaRegion]);
+  }, [gseComunas, groupBy, comunaRegion, allowedComunas]);
 
   // GSE distribution for selected comunas
   const gseDistribution = useMemo(() => {
