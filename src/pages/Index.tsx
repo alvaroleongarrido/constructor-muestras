@@ -87,12 +87,13 @@ export default function SampleDashboard() {
   }, []);
 
   // Config state
-  const [ageMin, setAgeMin] = useState(1);
+  const [ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(120);
   const [sexFilter, setSexFilter] = useState<"both" | "male" | "female">("both");
   const [selectedRegions, setSelectedRegions] = useState<number[]>(ALL_REGION_CODES);
   const [selectedComunas, setSelectedComunas] = useState<number[]>([]);
-  const [selectedGse, setSelectedGse] = useState<string[]>([]);
+  const [selectedGse, setSelectedGse] = useState<string[]>([...GSE_OPTIONS]);
+  const [minComunaPop, setMinComunaPop] = useState<number>(0);
   const [ageRanges, setAgeRanges] = useState<AgeRange[]>(DEFAULT_AGE_RANGES);
   const [gseGroups, setGseGroups] = useState<GseGroup[]>([]);
   const [sampleSize, setSampleSize] = useState(1000);
