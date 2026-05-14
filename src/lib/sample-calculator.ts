@@ -30,6 +30,7 @@ export interface SampleConfig {
   gseGroups: GseGroup[];
   sampleSize: number;
   groupBy: "region" | "zone" | "comuna";
+  allowedComunas?: number[] | null;
 }
 
 export interface QuotaRow {
@@ -63,9 +64,11 @@ export interface SampleResult {
 }
 
 function filterData(personas: PersonaCenso[], config: SampleConfig): PersonaCenso[] {
+  const allowed = config.allowedComunas ? new Set(config.allowedComunas) : null;
   return personas.filter((p) => {
     if (!config.selectedRegions.includes(p.region)) return false;
     if (config.selectedComunas.length > 0 && !config.selectedComunas.includes(p.comuna)) return false;
+    if (allowed && !allowed.has(p.comuna)) return false;
     if (p.edad < config.ageMin || p.edad > config.ageMax) return false;
     if (config.sexFilter === "male" && p.sexo !== 1) return false;
     if (config.sexFilter === "female" && p.sexo !== 2) return false;
@@ -74,9 +77,11 @@ function filterData(personas: PersonaCenso[], config: SampleConfig): PersonaCens
 }
 
 function filterGseData(personasGse: PersonaGseCenso[], config: SampleConfig): PersonaGseCenso[] {
+  const allowed = config.allowedComunas ? new Set(config.allowedComunas) : null;
   return personasGse.filter((p) => {
     if (!config.selectedRegions.includes(p.region)) return false;
     if (config.selectedComunas.length > 0 && !config.selectedComunas.includes(p.comuna)) return false;
+    if (allowed && !allowed.has(p.comuna)) return false;
     if (p.edad < config.ageMin || p.edad > config.ageMax) return false;
     if (config.sexFilter === "male" && p.sexo !== 1) return false;
     if (config.sexFilter === "female" && p.sexo !== 2) return false;

@@ -87,12 +87,13 @@ export default function SampleDashboard() {
   }, []);
 
   // Config state
-  const [ageMin, setAgeMin] = useState(1);
+  const [ageMin, setAgeMin] = useState(18);
   const [ageMax, setAgeMax] = useState(120);
   const [sexFilter, setSexFilter] = useState<"both" | "male" | "female">("both");
   const [selectedRegions, setSelectedRegions] = useState<number[]>(ALL_REGION_CODES);
   const [selectedComunas, setSelectedComunas] = useState<number[]>([]);
-  const [selectedGse, setSelectedGse] = useState<string[]>([]);
+  const [selectedGse, setSelectedGse] = useState<string[]>([...GSE_OPTIONS]);
+  const [minComunaPop, setMinComunaPop] = useState<number>(0);
   const [ageRanges, setAgeRanges] = useState<AgeRange[]>(DEFAULT_AGE_RANGES);
   const [gseGroups, setGseGroups] = useState<GseGroup[]>([]);
   const [sampleSize, setSampleSize] = useState(1000);
@@ -109,13 +110,34 @@ export default function SampleDashboard() {
   // For comuna groupBy mode: single region + single comuna
   const [comunaRegion, setComunaRegion] = useState<number | null>(null);
 
+  // Population per comuna (total, all ages/sexes) — used for the "min population" filter
+  const comunaPopulations = useMemo(() => {
+    const map = new Map<number, number>();
+    if (!personasCenso) return map;
+    for (const p of personasCenso) {
+      map.set(p.comuna, (map.get(p.comuna) || 0) + p.n_personas);
+    }
+    return map;
+  }, [personasCenso]);
+
+  const allowedComunas = useMemo<number[] | null>(() => {
+    if (!minComunaPop || minComunaPop <= 0) return null;
+    const out: number[] = [];
+    for (const [code, pop] of comunaPopulations) {
+      if (pop >= minComunaPop) out.push(code);
+    }
+    return out;
+  }, [comunaPopulations, minComunaPop]);
+
   // Available comunas for comuna mode
   const availableComunasForMode = useMemo(() => {
     if (!gseComunas || groupBy !== "comuna" || comunaRegion === null) return [];
+    const allowedSet = allowedComunas ? new Set(allowedComunas) : null;
     return gseComunas
       .filter((c) => c.region === comunaRegion && c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => !allowedSet || allowedSet.has(c.comuna))
       .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
-  }, [gseComunas, groupBy, comunaRegion]);
+  }, [gseComunas, groupBy, comunaRegion, allowedComunas]);
 
   // GSE distribution for selected comunas
   const gseDistribution = useMemo(() => {
@@ -148,8 +170,9 @@ export default function SampleDashboard() {
       selectedRegions: effectiveRegions,
       selectedComunas: effectiveComunas,
       selectedGse, ageRanges, gseGroups, sampleSize, groupBy,
+      allowedComunas,
     }),
-    [ageMin, ageMax, sexFilter, effectiveRegions, effectiveComunas, selectedGse, ageRanges, gseGroups, sampleSize, groupBy]
+    [ageMin, ageMax, sexFilter, effectiveRegions, effectiveComunas, selectedGse, ageRanges, gseGroups, sampleSize, groupBy, allowedComunas]
   );
 
   const result: SampleResult = useMemo(() => {
@@ -406,25 +429,7 @@ export default function SampleDashboard() {
                 />
               </div>
 
-              <div>
-                <Label className="text-xs text-muted-foreground">Agrupar por</Label>
-                <Select value={groupBy} onValueChange={(v) => {
-                  setGroupBy(v as typeof groupBy);
-                  if (v === "comuna") {
-                    setComunaRegion(null);
-                    setSelectedComunas([]);
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zone">Zona</SelectItem>
-                    <SelectItem value="region">Región</SelectItem>
-                    <SelectItem value="comuna">Comuna</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
 
               {/* Comuna mode: select region then comuna */}
               {groupBy === "comuna" && (
@@ -513,18 +518,64 @@ export default function SampleDashboard() {
             </CardContent>
           </Card>
 
-          {/* Regions - hidden in comuna mode */}
-          {groupBy !== "comuna" && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Target className="h-4 w-4 text-primary" />
-                  Regiones / Zonas
-                </CardTitle>
-                <CardDescription>Selecciona las regiones a incluir</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+          {/* Regions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Regiones / Zonas
+              </CardTitle>
+              <CardDescription>Agrupación geográfica y filtros</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Agrupar por</Label>
+                <Select value={groupBy} onValueChange={(v) => {
+                  setGroupBy(v as typeof groupBy);
+                  if (v === "comuna") {
+                    setComunaRegion(null);
+                    setSelectedComunas([]);
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zone">Zona</SelectItem>
+                    <SelectItem value="region">Región</SelectItem>
+                    <SelectItem value="comuna">Comuna</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  Población mínima de comuna
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="h-3 w-3" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-56 text-xs">Excluye comunas cuya población total sea menor al umbral. Deja en 0 para incluir todas.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="Sin filtro"
+                  value={minComunaPop || ""}
+                  onChange={(e) => setMinComunaPop(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+                {allowedComunas && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {allowedComunas.length} comunas cumplen el umbral.
+                  </p>
+                )}
+              </div>
+
+              {groupBy !== "comuna" && (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1 border-t pt-3">
                   {(Object.keys(ZONE_REGIONS) as Zone[]).map((zone) => (
                     <div key={zone}>
                       <div className="flex items-center gap-2 mb-1">
@@ -563,9 +614,10 @@ export default function SampleDashboard() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
+
 
           {/* Age Ranges */}
           <Card>
