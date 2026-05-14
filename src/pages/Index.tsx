@@ -314,15 +314,13 @@ export default function SampleDashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className="border-b border-border bg-card">
+        <div className="max-w-7xl mx-auto px-8 py-6 flex items-end justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            <p className="eyebrow mb-2">Censo Chile 2024 · INE</p>
+            <h1 className="text-[28px] leading-none font-semibold text-foreground tracking-tight">
               Calculadora de Muestras
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Basado en datos del Censo de Chile 2024 — INE
-            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleExportCSV}>
@@ -337,7 +335,7 @@ export default function SampleDashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
         {/* Configuration */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Universe Config */}
