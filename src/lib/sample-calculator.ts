@@ -30,6 +30,7 @@ export interface SampleConfig {
   gseGroups: GseGroup[];
   sampleSize: number;
   groupBy: "region" | "zone" | "comuna";
+  allowedComunas?: number[] | null;
 }
 
 export interface QuotaRow {
