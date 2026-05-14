@@ -50,12 +50,12 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
 ];
 
 const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(199, 89%, 48%)",
-  "hsl(172, 66%, 50%)",
-  "hsl(43, 96%, 56%)",
-  "hsl(27, 87%, 67%)",
-  "hsl(280, 65%, 60%)",
+  "hsl(220, 25%, 15%)",
+  "hsl(220, 18%, 30%)",
+  "hsl(220, 12%, 45%)",
+  "hsl(220, 10%, 60%)",
+  "hsl(220, 8%, 75%)",
+  "hsl(25, 75%, 55%)",
 ];
 
 const ALL_REGION_CODES = REGION_MAP.map((r) => r.code);
