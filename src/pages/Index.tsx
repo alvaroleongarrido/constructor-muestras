@@ -429,25 +429,7 @@ export default function SampleDashboard() {
                 />
               </div>
 
-              <div>
-                <Label className="text-xs text-muted-foreground">Agrupar por</Label>
-                <Select value={groupBy} onValueChange={(v) => {
-                  setGroupBy(v as typeof groupBy);
-                  if (v === "comuna") {
-                    setComunaRegion(null);
-                    setSelectedComunas([]);
-                  }
-                }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="zone">Zona</SelectItem>
-                    <SelectItem value="region">Región</SelectItem>
-                    <SelectItem value="comuna">Comuna</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+
 
               {/* Comuna mode: select region then comuna */}
               {groupBy === "comuna" && (
