@@ -50,12 +50,12 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
 ];
 
 const CHART_COLORS = [
-  "hsl(217, 91%, 60%)",
-  "hsl(199, 89%, 48%)",
-  "hsl(172, 66%, 50%)",
-  "hsl(43, 96%, 56%)",
-  "hsl(27, 87%, 67%)",
-  "hsl(280, 65%, 60%)",
+  "hsl(220, 25%, 15%)",
+  "hsl(220, 18%, 30%)",
+  "hsl(220, 12%, 45%)",
+  "hsl(220, 10%, 60%)",
+  "hsl(220, 8%, 75%)",
+  "hsl(25, 75%, 55%)",
 ];
 
 const ALL_REGION_CODES = REGION_MAP.map((r) => r.code);
@@ -314,15 +314,13 @@ export default function SampleDashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className="border-b border-border bg-card">
+        <div className="max-w-7xl mx-auto px-8 py-6 flex items-end justify-between gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+            <p className="eyebrow mb-2">Censo Chile 2024 · INE</p>
+            <h1 className="text-[28px] leading-none font-semibold text-foreground tracking-tight">
               Calculadora de Muestras
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Basado en datos del Censo de Chile 2024 — INE
-            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleExportCSV}>
@@ -337,7 +335,7 @@ export default function SampleDashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-8 py-8 space-y-8">
         {/* Configuration */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Universe Config */}
@@ -662,28 +660,31 @@ export default function SampleDashboard() {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Universo Total</p>
-              <p className="text-3xl font-bold text-foreground mt-1">
+              <p className="eyebrow">Universo Total</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 {result.totalUniverse.toLocaleString("es-CL")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">personas en población objetivo</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Tamaño de Muestra</p>
-              <p className="text-3xl font-bold text-primary mt-1">
+              <p className="eyebrow">Tamaño de Muestra</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 {result.sampleSize.toLocaleString("es-CL")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">encuestas a realizar</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-px bg-foreground/80" />
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Margen de Error</p>
-              <p className="text-3xl font-bold text-foreground mt-1">
+              <p className="eyebrow">Margen de Error</p>
+              <p className="text-[34px] leading-tight font-mono font-medium text-foreground mt-2">
                 ±{result.marginOfError.toFixed(1)}%
               </p>
               <p className="text-xs text-muted-foreground mt-1">al 95% de confianza</p>
