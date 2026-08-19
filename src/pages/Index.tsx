@@ -107,8 +107,9 @@ export default function SampleDashboard() {
   const [crossRegion, setCrossRegion] = useState(true);
   const [crossGse, setCrossGse] = useState(false);
 
-  // For comuna groupBy mode: single region + single comuna
+  // For comuna groupBy mode: optional region filter + free-text search
   const [comunaRegion, setComunaRegion] = useState<number | null>(null);
+  const [comunaSearch, setComunaSearch] = useState("");
 
   // Population per comuna (total, all ages/sexes) — used for the "min population" filter
   const comunaPopulations = useMemo(() => {
@@ -129,15 +130,37 @@ export default function SampleDashboard() {
     return out;
   }, [comunaPopulations, minComunaPop]);
 
-  // Available comunas for comuna mode
+  // Drop selected comunas that no longer meet the population threshold
+  useEffect(() => {
+    if (!allowedComunas) return;
+    const allowedSet = new Set(allowedComunas);
+    setSelectedComunas((prev) => {
+      const next = prev.filter((c) => allowedSet.has(c));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allowedComunas]);
+
+  // Available comunas for comuna mode (all regions, optional region + text filter)
   const availableComunasForMode = useMemo(() => {
-    if (!gseComunas || groupBy !== "comuna" || comunaRegion === null) return [];
+    if (!gseComunas || groupBy !== "comuna") return [];
     const allowedSet = allowedComunas ? new Set(allowedComunas) : null;
+    const q = normalizeText(comunaSearch.trim());
     return gseComunas
-      .filter((c) => c.region === comunaRegion && c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => comunaRegion === null || c.region === comunaRegion)
       .filter((c) => !allowedSet || allowedSet.has(c.comuna))
+      .filter((c) => !q || normalizeText(c.nombre_comuna).includes(q))
       .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
-  }, [gseComunas, groupBy, comunaRegion, allowedComunas]);
+  }, [gseComunas, groupBy, comunaRegion, allowedComunas, comunaSearch]);
+
+  const selectedComunaObjects = useMemo(() => {
+    if (!gseComunas) return [];
+    const set = new Set(selectedComunas);
+    return gseComunas
+      .filter((c) => set.has(c.comuna))
+      .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
+  }, [gseComunas, selectedComunas]);
+
 
   // GSE distribution for selected comunas
   const gseDistribution = useMemo(() => {
