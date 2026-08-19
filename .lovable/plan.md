@@ -1,37 +1,24 @@
+# Selección múltiple de comunas
 
-## Dashboard de Cálculo de Muestras para Encuestas — Chile 2024
+Hoy, con "Agrupar por: Comuna", el panel izquierdo obliga a elegir una región y luego una sola comuna desde un desplegable. Lo reemplazamos por un buscador multi-selección que permite acumular comunas de cualquier región del país.
 
-### Resumen
-Dashboard SaaS limpio y moderno para calcular muestras de encuestas basadas en el Censo de Chile 2024, con paleta Cloud (blancos, grises, azul), tipografía clara, y exportación a Excel/CSV.
+## Cómo funcionará
 
-### Datos del Censo
-- Incorporar datos demográficos del Censo 2024 de Chile directamente en el código (JSON estático):
-  - **16 regiones** con población por sexo y tramos de edad
-  - Fuente: proyecciones INE 2024
+- Al elegir "Comuna" aparece un buscador: escribes parte del nombre (sin distinguir tildes ni mayúsculas) y se listan las comunas coincidentes con su región.
+- Al marcar una comuna se agrega al conjunto activo; se muestran como chips con una "x" para quitarlas, más un enlace "Limpiar todo".
+- El selector de región deja de ser obligatorio y pasa a ser un filtro opcional ("Todas las regiones") para acotar la lista del buscador.
+- Se pueden combinar comunas de distintas regiones en una misma muestra.
+- El filtro "Población mínima de comuna" sigue aplicando: las comunas que no cumplen el umbral no aparecen en la lista; las ya seleccionadas que dejen de cumplirlo se descartan automáticamente.
+- Sin comunas seleccionadas, se muestra un mensaje indicando que se debe elegir al menos una.
+- La tabla de distribución GSE y todos los cálculos siguen igual, ahora agregando el conjunto de comunas elegidas.
 
-### Funcionalidades
+## Detalles técnicos
 
-#### 1. Panel de Configuración (sidebar izquierdo o sección superior)
-- **Universo objetivo**: Selector de edad mínima y máxima (ej: 18+, 15-65, etc.)
-- **Sexo**: Filtro para incluir ambos, solo hombres o solo mujeres
-- **Regiones**: Multi-select de regiones o agrupar en zonas (Norte, Centro, Sur, RM)
-- **Rangos de edad personalizados**: El usuario define los tramos (ej: 18-29, 30-44, 45-59, 60+)
-- **Tamaño de muestra**: Input numérico para definir el n total deseado
-
-#### 2. Panel de Resultados
-- **Resumen**: Universo total filtrado, tamaño de muestra, nivel de confianza implícito
-- **Tabla de cuotas**: Cruce de variables (sexo × edad × región/zona) con:
-  - Población censal
-  - Proporción (%)
-  - Muestra asignada (proporcional)
-- **Gráficos simples**: Barras horizontales mostrando distribución por sexo, edad y región
-
-#### 3. Exportación
-- Botón para descargar la tabla de cuotas como CSV o Excel (.xlsx)
-
-### Diseño
-- Estilo SaaS moderno con fondo claro (#fafbfc), cards con bordes suaves
-- Azul (#3b82f6) como color de acento para botones y highlights
-- Grises (#94a3b8, #e8ecf1) para textos secundarios y bordes
-- Tipografía limpia, labels descriptivos, tooltips de ayuda para usuarios no técnicos
-- Layout responsive: configuración arriba, resultados abajo en móvil
+- `src/pages/Index.tsx`:
+  - `comunaRegion` pasa a ser filtro opcional (`number | null`, "Todas") y ya no resetea `selectedComunas`.
+  - `availableComunasForMode` deja de exigir `comunaRegion !== null`; aplica filtro de región solo si está definido, filtro de `allowedComunas` y nuevo filtro por texto de búsqueda (normalizando acentos).
+  - Nuevo estado `comunaSearch` y UI: input de búsqueda + lista scrolleable de checkboxes (máx. ~240px de alto) + chips de seleccionadas.
+  - `effectiveRegions` en modo comuna se deriva de las regiones de las comunas seleccionadas (vía `gseComunas`), en vez del único `comunaRegion`.
+  - `effectiveComunas` se mantiene como `selectedComunas`.
+  - Efecto que depura `selectedComunas` cuando cambia `allowedComunas`.
+- No se modifica `src/lib/sample-calculator.ts` ni la lógica de cálculo: ya soporta múltiples comunas vía `selectedComunas` y resuelve nombres con `gseComunas`.
