@@ -461,45 +461,97 @@ export default function SampleDashboard() {
 
 
 
-              {/* Comuna mode: select region then comuna */}
+              {/* Comuna mode: multi-select search across all regions */}
               {groupBy === "comuna" && (
                 <div className="space-y-3 rounded-md border p-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Región</Label>
-                    <Select value={comunaRegion?.toString() ?? ""} onValueChange={(v) => {
-                      setComunaRegion(parseInt(v));
-                      setSelectedComunas([]);
-                    }}>
+                    <Label className="text-xs text-muted-foreground">Región (filtro opcional)</Label>
+                    <Select
+                      value={comunaRegion?.toString() ?? "all"}
+                      onValueChange={(v) => setComunaRegion(v === "all" ? null : parseInt(v))}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una región" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Todas las regiones</SelectItem>
                         {REGION_MAP.map((r) => (
                           <SelectItem key={r.code} value={r.code.toString()}>{r.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  {comunaRegion !== null && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Comuna</Label>
-                      <Select
-                        value={selectedComunas[0]?.toString() ?? ""}
-                        onValueChange={(v) => setSelectedComunas([parseInt(v)])}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una comuna" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableComunasForMode.map((c) => (
-                            <SelectItem key={c.comuna} value={c.comuna.toString()}>{c.nombre_comuna}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">Comunas</Label>
+                      {selectedComunas.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-[10px] text-muted-foreground underline hover:text-foreground"
+                          onClick={() => setSelectedComunas([])}
+                        >
+                          Limpiar todo
+                        </button>
+                      )}
                     </div>
-                  )}
+                    <Input
+                      className="mt-1"
+                      placeholder="Buscar comuna por nombre…"
+                      value={comunaSearch}
+                      onChange={(e) => setComunaSearch(e.target.value)}
+                    />
+                    <div className="mt-2 max-h-60 overflow-y-auto rounded-md border divide-y">
+                      {availableComunasForMode.length === 0 && (
+                        <p className="p-2 text-xs text-muted-foreground">Sin comunas que coincidan.</p>
+                      )}
+                      {availableComunasForMode.map((c) => (
+                        <label
+                          key={c.comuna}
+                          className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-muted/50"
+                        >
+                          <Checkbox
+                            checked={selectedComunas.includes(c.comuna)}
+                            onCheckedChange={(checked) =>
+                              setSelectedComunas((prev) =>
+                                checked ? [...prev, c.comuna] : prev.filter((x) => x !== c.comuna)
+                              )
+                            }
+                          />
+                          <span className="text-xs flex-1">{c.nombre_comuna}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {REGION_MAP.find((r) => r.code === c.region)?.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {selectedComunaObjects.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {selectedComunaObjects.map((c) => (
+                          <Badge key={c.comuna} variant="secondary" className="gap-1 text-[10px] font-normal">
+                            {c.nombre_comuna}
+                            <button
+                              type="button"
+                              aria-label={`Quitar ${c.nombre_comuna}`}
+                              onClick={() =>
+                                setSelectedComunas((prev) => prev.filter((x) => x !== c.comuna))
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        Selecciona al menos una comuna para calcular la muestra.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
+
 
               {/* GSE Selector */}
               <div>
