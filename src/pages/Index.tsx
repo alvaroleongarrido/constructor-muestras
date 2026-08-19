@@ -182,9 +182,12 @@ export default function SampleDashboard() {
 
   // Effective regions and comunas based on groupBy mode
   const effectiveRegions = useMemo(() => {
-    if (groupBy === "comuna" && comunaRegion !== null) return [comunaRegion];
+    if (groupBy === "comuna") {
+      return Array.from(new Set(selectedComunaObjects.map((c) => c.region)));
+    }
     return selectedRegions;
-  }, [groupBy, comunaRegion, selectedRegions]);
+  }, [groupBy, selectedComunaObjects, selectedRegions]);
+
 
   const effectiveComunas = useMemo(() => {
     if (groupBy === "comuna") return selectedComunas;
