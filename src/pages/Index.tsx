@@ -49,6 +49,10 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
   { label: "60+", min: 60, max: 120 },
 ];
 
+const normalizeText = (s: string) =>
+  (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 const CHART_COLORS = [
   "hsl(220, 25%, 15%)",
   "hsl(220, 18%, 30%)",
@@ -107,8 +111,9 @@ export default function SampleDashboard() {
   const [crossRegion, setCrossRegion] = useState(true);
   const [crossGse, setCrossGse] = useState(false);
 
-  // For comuna groupBy mode: single region + single comuna
+  // For comuna groupBy mode: optional region filter + free-text search
   const [comunaRegion, setComunaRegion] = useState<number | null>(null);
+  const [comunaSearch, setComunaSearch] = useState("");
 
   // Population per comuna (total, all ages/sexes) — used for the "min population" filter
   const comunaPopulations = useMemo(() => {
@@ -129,15 +134,37 @@ export default function SampleDashboard() {
     return out;
   }, [comunaPopulations, minComunaPop]);
 
-  // Available comunas for comuna mode
+  // Drop selected comunas that no longer meet the population threshold
+  useEffect(() => {
+    if (!allowedComunas) return;
+    const allowedSet = new Set(allowedComunas);
+    setSelectedComunas((prev) => {
+      const next = prev.filter((c) => allowedSet.has(c));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allowedComunas]);
+
+  // Available comunas for comuna mode (all regions, optional region + text filter)
   const availableComunasForMode = useMemo(() => {
-    if (!gseComunas || groupBy !== "comuna" || comunaRegion === null) return [];
+    if (!gseComunas || groupBy !== "comuna") return [];
     const allowedSet = allowedComunas ? new Set(allowedComunas) : null;
+    const q = normalizeText(comunaSearch.trim());
     return gseComunas
-      .filter((c) => c.region === comunaRegion && c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => c.nombre_comuna != null && c.nombre_comuna !== "")
+      .filter((c) => comunaRegion === null || c.region === comunaRegion)
       .filter((c) => !allowedSet || allowedSet.has(c.comuna))
+      .filter((c) => !q || normalizeText(c.nombre_comuna).includes(q))
       .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
-  }, [gseComunas, groupBy, comunaRegion, allowedComunas]);
+  }, [gseComunas, groupBy, comunaRegion, allowedComunas, comunaSearch]);
+
+  const selectedComunaObjects = useMemo(() => {
+    if (!gseComunas) return [];
+    const set = new Set(selectedComunas);
+    return gseComunas
+      .filter((c) => set.has(c.comuna))
+      .sort((a, b) => (a.nombre_comuna ?? "").localeCompare(b.nombre_comuna ?? ""));
+  }, [gseComunas, selectedComunas]);
+
 
   // GSE distribution for selected comunas
   const gseDistribution = useMemo(() => {
@@ -155,9 +182,12 @@ export default function SampleDashboard() {
 
   // Effective regions and comunas based on groupBy mode
   const effectiveRegions = useMemo(() => {
-    if (groupBy === "comuna" && comunaRegion !== null) return [comunaRegion];
+    if (groupBy === "comuna") {
+      return Array.from(new Set(selectedComunaObjects.map((c) => c.region)));
+    }
     return selectedRegions;
-  }, [groupBy, comunaRegion, selectedRegions]);
+  }, [groupBy, selectedComunaObjects, selectedRegions]);
+
 
   const effectiveComunas = useMemo(() => {
     if (groupBy === "comuna") return selectedComunas;
@@ -431,45 +461,97 @@ export default function SampleDashboard() {
 
 
 
-              {/* Comuna mode: select region then comuna */}
+              {/* Comuna mode: multi-select search across all regions */}
               {groupBy === "comuna" && (
                 <div className="space-y-3 rounded-md border p-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Región</Label>
-                    <Select value={comunaRegion?.toString() ?? ""} onValueChange={(v) => {
-                      setComunaRegion(parseInt(v));
-                      setSelectedComunas([]);
-                    }}>
+                    <Label className="text-xs text-muted-foreground">Región (filtro opcional)</Label>
+                    <Select
+                      value={comunaRegion?.toString() ?? "all"}
+                      onValueChange={(v) => setComunaRegion(v === "all" ? null : parseInt(v))}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una región" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Todas las regiones</SelectItem>
                         {REGION_MAP.map((r) => (
                           <SelectItem key={r.code} value={r.code.toString()}>{r.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  {comunaRegion !== null && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Comuna</Label>
-                      <Select
-                        value={selectedComunas[0]?.toString() ?? ""}
-                        onValueChange={(v) => setSelectedComunas([parseInt(v)])}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una comuna" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableComunasForMode.map((c) => (
-                            <SelectItem key={c.comuna} value={c.comuna.toString()}>{c.nombre_comuna}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">Comunas</Label>
+                      {selectedComunas.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-[10px] text-muted-foreground underline hover:text-foreground"
+                          onClick={() => setSelectedComunas([])}
+                        >
+                          Limpiar todo
+                        </button>
+                      )}
                     </div>
-                  )}
+                    <Input
+                      className="mt-1"
+                      placeholder="Buscar comuna por nombre…"
+                      value={comunaSearch}
+                      onChange={(e) => setComunaSearch(e.target.value)}
+                    />
+                    <div className="mt-2 max-h-60 overflow-y-auto rounded-md border divide-y">
+                      {availableComunasForMode.length === 0 && (
+                        <p className="p-2 text-xs text-muted-foreground">Sin comunas que coincidan.</p>
+                      )}
+                      {availableComunasForMode.map((c) => (
+                        <label
+                          key={c.comuna}
+                          className="flex items-center gap-2 px-2 py-1.5 cursor-pointer hover:bg-muted/50"
+                        >
+                          <Checkbox
+                            checked={selectedComunas.includes(c.comuna)}
+                            onCheckedChange={(checked) =>
+                              setSelectedComunas((prev) =>
+                                checked ? [...prev, c.comuna] : prev.filter((x) => x !== c.comuna)
+                              )
+                            }
+                          />
+                          <span className="text-xs flex-1">{c.nombre_comuna}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {REGION_MAP.find((r) => r.code === c.region)?.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {selectedComunaObjects.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {selectedComunaObjects.map((c) => (
+                          <Badge key={c.comuna} variant="secondary" className="gap-1 text-[10px] font-normal">
+                            {c.nombre_comuna}
+                            <button
+                              type="button"
+                              aria-label={`Quitar ${c.nombre_comuna}`}
+                              onClick={() =>
+                                setSelectedComunas((prev) => prev.filter((x) => x !== c.comuna))
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        Selecciona al menos una comuna para calcular la muestra.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
+
 
               {/* GSE Selector */}
               <div>
