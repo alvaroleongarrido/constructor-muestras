@@ -49,6 +49,10 @@ const DEFAULT_AGE_RANGES: AgeRange[] = [
   { label: "60+", min: 60, max: 120 },
 ];
 
+const normalizeText = (s: string) =>
+  (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 const CHART_COLORS = [
   "hsl(220, 25%, 15%)",
   "hsl(220, 18%, 30%)",
